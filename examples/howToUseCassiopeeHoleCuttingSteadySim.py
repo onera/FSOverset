@@ -5,7 +5,7 @@ from CODA import StopNumIterations, StopRelativeReduction
 from CODA import MonitorTabular, MonitorSelection
 from CODA.CODAHelpers import BuildDiscretizationParameterTrees, BuildTimeIntegrationParameterTrees
 
-from FSOverset.FSOverset import FSOverset, generateBlankingMask, extractActiveSubMesh, copySolution, generateDiscParasFromMesh, getClacInfo, getMeshKeys
+from FSOverset.FSOverset import FSOverset, generateBlankingMask, extractActiveSubMesh, copySolution, generateDiscParasFromMesh, getClacInfo, getMeshKeys, display
 from FSCGNSConverter.FSCGNSConverter import buildMeshOps
 
 # mesh settings
@@ -17,7 +17,7 @@ targetResidualReduction = 1.0e-8
 maximumNumberOfIterations = 200
 
 meshDict = {
-    'background': {'meshFilename': localDirIn+'background.h5', 'meshProcessorWeight': 4.},
+    'background': {'meshFilename': localDirIn+'background.h5', 'meshProcessorWeight': 2.},
     'naca': {'meshFilename': localDirIn+'naca.h5', 'meshProcessorWeight': 1.},
 }
 offsetDict = {
@@ -25,6 +25,13 @@ offsetDict = {
 }
 blankingDict = {
     'background': ['naca']
+}
+displayDict = {
+    'variables': ['Density'],
+    'xlim': [-1.5, 2.5],
+    'ylim': [-1.0, 1.0],
+    'zplane': 0.0,
+    'mpl': False
 }
 
 discSelectionParaDict = {
@@ -160,6 +167,14 @@ state.ExportToFSMesh(disc.GetMeshInterface(), fsmeshActive, 'State') or FSError.
 
 # copy solution to original grids
 copySolution(dm, meshKeyOrig, meshKeyActive)
+
+# export image with Cassiopee
+if displayDict is not None:
+    iterations = dataLog.GetDataArray('TimeIntegration', 'Iteration')
+    niter = iterations.Size()
+    it = iterations[niter-1]
+
+    display(globalClac, fsmeshActive, meshKey, displayDict['variables'], dataset='State', it=it, displayDict=displayDict, localDir=localDirOut, saveTree=True)
 
 # export convergence history
 dataLog.ExportDataTECPLOT(localDirOut+'monitor.dat', 'l2-norms') or FSError.PrintAndExit()

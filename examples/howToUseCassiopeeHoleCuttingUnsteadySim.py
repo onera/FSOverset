@@ -12,7 +12,7 @@ from FSCGNSConverter.FSCGNSConverter import buildMeshOps
 import math
 import sys
 
-motionType = sys.argv[1]
+motionType = sys.argv[1].lower()
 if motionType not in ['rotation', 'oscillation']:
     raise ValueError('FSOverset: incorrect motionType (%s). Possible values are "rotation" and "oscillation".'%motionType)
 
@@ -59,6 +59,13 @@ offsetDict = {
 blankingDict = {
     'background': ['naca']
 }
+displayDict = {
+    'variables': ['Density'],
+    'xlim': [-1.5, 2.5],
+    'ylim': [-1.0, 1.0],
+    'zplane': 0.0,
+    'mpl': False
+}
 
 # set up motionDict
 if motionType == 'oscillation':
@@ -80,26 +87,6 @@ else: # rotation
             'axis_vct': [kx, ky, kz],
             'angular_frq': omega
         }
-    }
-
-# set up displayDict
-if motionType == 'oscillation':
-    displayDict = {
-        'variables': ['Density'],
-        'isoScales': {'Density': ['Density', 25, 0.75, 1.15]},
-        'xlim': [-1.5, 2.5],
-        'ylim': [-1.0, 1.0],
-        'zplane': 0.0,
-        'mpl': False
-    }
-else: # rotation
-    displayDict = {
-        'variables': ['Density'],
-        'isoScales': {'Density': ['Density', 25, 0.92, 1.02]},
-        'xlim': [-1.5, 2.5],
-        'ylim': [-1.0, 1.0],
-        'zplane': 0.0,
-        'mpl': False
     }
 
 discSelectionParaDict = {

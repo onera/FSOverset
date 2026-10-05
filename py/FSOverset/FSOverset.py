@@ -5,6 +5,7 @@ import Converter.PyTree as C
 import Connector.PyTree as X
 import Converter.Internal as Internal
 import Converter.Mpi as Cmpi
+import Connector.Mpi as Xmpi
 import Generator.PyTree as G
 import Transform.PyTree as T
 import Geom.PyTree as D
@@ -204,10 +205,11 @@ def display(clac, fsmesh, meshKey, variables, dataset='State', it=0, displayDict
     # conversion
     bcDict = generateBCDictFromMesh(fsmesh)
     convObj = FSCGNSConverter(clac=clac, fsmesh=fsmesh, bcDict=bcDict, datasets=['State'])
-    convObj.convert2CGNS()
+    convObj.convert2CGNS(forFFDX=True) # get NGon array
     zone = Internal.getZones(convObj.pyTree)[0]
     Cmpi._setProc(zone, Cmpi.rank)
     zone[0] = '%s_%d'%(meshKey, Cmpi.rank)
+    Xmpi._connectMatchNGon(zone)
 
     listOfMeshKeys = set(Cmpi.allgather(meshKey))
     listOfMeshKeys = sorted(listOfMeshKeys)
@@ -219,26 +221,22 @@ def display(clac, fsmesh, meshKey, variables, dataset='State', it=0, displayDict
         ])
     
     t = C.newPyTree(listOfZones)
+
+    # get correct flow container
+    Internal.__FlowSolutionCenters__ = 'FlowSolution#%s'%dataset
+    varList = C.getVarNames(t, excludeXYZ=True, loc='centers')[0]
+    t = Cmpi.center2Node(t, var=varList)
+    Internal._rmNodesByName(t, Internal.__FlowSolutionCenters__)
+    Internal.__FlowSolutionCenters__ = 'FlowSolution#Centers'
+
+    # add cellN
+    X._applyBCOverlaps(t, depth=2, loc='nodes', val=0, cellNName='cellN')
+
+    # save solution tree
     if saveTree: Cmpi.convertPyTree2File(t, localDir+'solution_iter%04d.cgns'%it)
 
     # force (x,y) plane
     T._rotate(t, (0,0,0), (1,0,0), -90.) # from (x,z) to (x,y)
-
-    # get correct flow container
-    # warning: this change must occur before the temp. patch below
-    #          otherwise T.join would erase the flowSolution containers
-    Internal.__FlowSolutionCenters__ = 'FlowSolution#%s'%dataset
-
-    # temporary patch for intra-grid match connection
-    t = Cmpi.allgatherTree(t)
-    if Cmpi.master:
-        listOfZones = []
-        for b in Internal.getBases(t): 
-            zone = T.join(Internal.getZones(b))
-            listOfZones.extend([b[0],zone])
-        t = C.newPyTree(listOfZones)
-    else:
-        t = []
 
     # display
     for v in variables:
@@ -246,8 +244,8 @@ def display(clac, fsmesh, meshKey, variables, dataset='State', it=0, displayDict
         export = CPlot.decorator if mpl else filename
 
         if v not in isoScales:
-            vmin = Cmpi.getMinValue(t, 'centers:%s'%v)
-            vmax = Cmpi.getMaxValue(t, 'centers:%s'%v)
+            vmin = Cmpi.getMinValue(t, v)
+            vmax = Cmpi.getMaxValue(t, v)
             isoScales[v] = [v, 25, vmin, vmax] # default CPlot values
 
         CPlot.display(t, mode='Scalar', scalarField=v,
@@ -261,9 +259,6 @@ def display(clac, fsmesh, meshKey, variables, dataset='State', it=0, displayDict
             fig, ax = Decorator.createSubPlot(box=True, figsize=(7,6), dpi=100, xlim=xlim, ylim=ylim)
             cbar = Decorator.createColorBar(fig, ax, title=v, discrete=True, nticks=5, labelFormat='%.2f', size='3%')
             Decorator.savefig(filename, pad=0.1, dpi=200)
-
-    Cmpi.barrier()
-    Internal.__FlowSolutionCenters__ = 'FlowSolution#Centers'
     
     return None
 
